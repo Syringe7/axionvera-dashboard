@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { recordRenderMetric, recordLifecycleEvent } from '../utils/profilerUtils';
 
 interface ProfilerOptions {
@@ -32,20 +32,15 @@ export function useProfiler({ componentName, trackStateUpdates = true }: Profile
     };
   }, [componentName]);
 
-  // Optional: A helper to wrap state setters to track when state changes triggered the render
-  const trackState = <T,>(initialValue: T): [T, (val: T) => void] => {
-    const [state, setState] = useState<T>(initialValue);
-    const setTrackedState = (val: T) => {
-      if (trackStateUpdates) {
-        recordLifecycleEvent(componentName, 'stateUpdate', performance.now());
-      }
-      setState(val);
-    };
-    return [state, setTrackedState];
-  };
+  // Returns a stable callback that logs state updates when tracking is enabled.
+  const trackStateUpdate = useCallback(() => {
+    if (trackStateUpdates) {
+      recordLifecycleEvent(componentName, 'stateUpdate', performance.now());
+    }
+  }, [componentName, trackStateUpdates]);
 
   return {
     renderCount: renderCount.current,
-    trackState
+    trackStateUpdate,
   };
 }

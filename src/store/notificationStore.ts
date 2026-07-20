@@ -26,6 +26,8 @@ import {
 } from '@/notifications/types';
 
 const DEFAULT_MAX_ITEMS = 100;
+/** Debounce delay (ms) for localStorage writes — batches rapid state changes. */
+const PERSIST_DEBOUNCE_MS = 300;
 
 /**
  * Framework-agnostic observable store for the notification center (#268).
@@ -33,6 +35,11 @@ const DEFAULT_MAX_ITEMS = 100;
  * Consumed via `useSyncExternalStore` in {@link useNotifications}. Persists
  * read/unread and dismissal state to localStorage. Ingestion is idempotent:
  * duplicates (by id or sourceId) are ignored.
+ *
+ * **Performance notes:**
+ * - localStorage writes are debounced to avoid blocking the main thread.
+ * - An `indexById` map provides O(1) lookups for single-item mutations.
+ * - Filter changes are shallow-compared to avoid unnecessary state copies.
  */
 export class NotificationStore {
   private state: NotificationState = {
@@ -44,13 +51,31 @@ export class NotificationStore {
   private readonly listeners = new Set<() => void>();
   private readonly seenIds = new Set<string>();
   private readonly seenSourceIds = new Set<string>();
+  /** O(1) id → index map kept in sync with `state.items`. */
+  private readonly indexById = new Map<string, number>();
   private readonly maxItems: number;
   private hydrated = false;
+  private persistTimer: ReturnType<typeof setTimeout> | null = null;
+  private unloadHandlerAttached = false;
 
   constructor(maxItems: number = DEFAULT_MAX_ITEMS) {
     this.maxItems = maxItems;
     this.subscribe = this.subscribe.bind(this);
     this.getSnapshot = this.getSnapshot.bind(this);
+    // Flush pending debounce on tab close to avoid data loss.
+    this.handleBeforeUnload = this.handleBeforeUnload.bind(this);
+  }
+
+  private handleBeforeUnload(): void {
+    if (this.persistTimer !== null) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+      saveNotificationState({
+        version: NOTIFICATION_STORAGE_VERSION,
+        items: this.state.items,
+        filter: this.state.filter,
+      });
+    }
   }
 
   subscribe(listener: () => void): () => void {
@@ -67,16 +92,25 @@ export class NotificationStore {
     if (this.hydrated || typeof window === 'undefined') return;
     this.hydrated = true;
 
+    // Register unload handler once so pending debounced writes are flushed.
+    // Guard against duplicate listeners across reset() → hydrate() cycles.
+    if (!this.unloadHandlerAttached) {
+      this.unloadHandlerAttached = true;
+      window.addEventListener('beforeunload', this.handleBeforeUnload);
+    }
+
     const persisted = loadNotificationState();
     if (!persisted) return;
 
     trackNotificationIds(persisted.items, this.seenIds, this.seenSourceIds);
 
+    const items = sortByPriority(persisted.items);
     this.state = {
-      items: sortByPriority(persisted.items),
+      items,
       filter: persisted.filter,
       lastUpdated: Date.now(),
     };
+    this.rebuildIndex(items);
   }
 
   /** Visible notifications matching the active filter, priority-sorted. */
@@ -144,9 +178,15 @@ export class NotificationStore {
   }
 
   setFilter(filter: Partial<NotificationFilter>): void {
-    this.commit({
-      filter: { ...this.state.filter, ...filter },
-    });
+    const next = { ...this.state.filter, ...filter };
+    // Shallow-compare to avoid triggering listeners when values unchanged.
+    if (
+      next.category === this.state.filter.category &&
+      next.read === this.state.filter.read
+    ) {
+      return;
+    }
+    this.commit({ filter: next });
   }
 
   clearDismissed(): void {
@@ -161,6 +201,11 @@ export class NotificationStore {
   reset(): void {
     this.seenIds.clear();
     this.seenSourceIds.clear();
+    this.indexById.clear();
+    if (this.persistTimer !== null) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
     this.hydrated = false;
     this.state = {
       items: [],
@@ -174,7 +219,7 @@ export class NotificationStore {
     id: string,
     updater: (item: AppNotification) => AppNotification,
   ): void {
-    const index = this.state.items.findIndex((n) => n.id === id);
+    const index = this.indexById.get(id) ?? -1;
     if (index === -1) return;
 
     const items = [...this.state.items];
@@ -188,16 +233,30 @@ export class NotificationStore {
       ...partial,
       lastUpdated: Date.now(),
     };
-    this.persist();
+    if (partial.items) this.rebuildIndex(partial.items);
+    this.schedulePersist();
     this.emit();
   }
 
-  private persist(): void {
-    saveNotificationState({
-      version: NOTIFICATION_STORAGE_VERSION,
-      items: this.state.items,
-      filter: this.state.filter,
-    });
+  /** Rebuild the O(1) id → index map after items change. */
+  private rebuildIndex(items: AppNotification[]): void {
+    this.indexById.clear();
+    for (let i = 0; i < items.length; i++) {
+      this.indexById.set(items[i].id, i);
+    }
+  }
+
+  /** Debounced localStorage write — batches rapid mutations. */
+  private schedulePersist(): void {
+    if (this.persistTimer !== null) clearTimeout(this.persistTimer);
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = null;
+      saveNotificationState({
+        version: NOTIFICATION_STORAGE_VERSION,
+        items: this.state.items,
+        filter: this.state.filter,
+      });
+    }, PERSIST_DEBOUNCE_MS);
   }
 
   private emit(): void {

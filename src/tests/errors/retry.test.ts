@@ -184,7 +184,7 @@ describe('RetryExecutor', () => {
     const executor = new RetryExecutor(policy);
     
     const fn = jest.fn().mockImplementation(() => 
-      new Promise(resolve => setTimeout(() => resolve('success'), 100))
+      new Promise(resolve => setTimeout(() => resolve('success'), 150))
     );
 
     const result = await executor.execute(fn);

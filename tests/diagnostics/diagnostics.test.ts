@@ -74,9 +74,12 @@ describe('Diagnostics', () => {
     expect(typeAErrors).toHaveLength(1);
   });
 
-  it('should filter events since a date', () => {
+  it('should filter events since a date', async () => {
     emit('old');
+    // Small delay so the 'new' event gets a strictly later timestamp.
+    await new Promise((r) => setTimeout(r, 5));
     const since = new Date();
+    await new Promise((r) => setTimeout(r, 5));
     emit('new');
     const recent = getEvents({ since });
     expect(recent).toHaveLength(1);

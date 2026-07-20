@@ -10,7 +10,7 @@ export function useExperiment(experimentKey: string, subject: ExperimentSubject 
 
   const assignment = useMemo(
     () => evaluateExperiment(experimentConfigByKey[experimentKey], subject),
-    [experimentKey, subject.id, subject.walletAddress, rolesKey]
+    [experimentKey, subject]
   );
 
   useEffect(() => {
