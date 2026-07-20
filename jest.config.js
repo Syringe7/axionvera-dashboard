@@ -2,8 +2,9 @@
 module.exports = {
   testEnvironment: "jest-environment-jsdom",
   setupFilesAfterEnv: ["<rootDir>/tests/setupTests.ts"],
-  testPathIgnorePatterns: ["<rootDir>/tests/e2e/"],
+  testPathIgnorePatterns: ["<rootDir>/tests/e2e/", "<rootDir>/tests/visual/"],
   moduleNameMapper: {
+    "^@/tokens$": "<rootDir>/src/tokens/index",
     "^@/(.*)$": "<rootDir>/src/$1",
     "\\.(css|less|scss|sass)$": "identity-obj-proxy"
   },
@@ -15,6 +16,7 @@ module.exports = {
         moduleResolution: "Node",
         esModuleInterop: true,
         allowSyntheticDefaultImports: true,
+        resolveJsonModule: true,
         strict: true,
         paths: {
           "@/*": ["src/*"]

@@ -1,11 +1,25 @@
 import { TrackedValue } from "../types/provenance";
 
 // Global debug flag (controlled by URL params for easy debugging)
-export const IS_PROVENANCE_ENABLED = 
-  typeof window !== 'undefined' && window.location.search.includes('debug=true');
+// A module-level override lets tests force provenance on/off without
+// touching the non-configurable window.location.search.
+let _enabledOverride: boolean | null = null;
+
+export function isProvenanceEnabled(): boolean {
+  if (_enabledOverride !== null) return _enabledOverride;
+  return typeof window !== 'undefined' && window.location.search.includes('debug=true');
+}
+
+/** Test-only helper — set to `true`/`false` to override, `null` to revert. */
+export function __setProvenanceEnabled(v: boolean | null): void {
+  _enabledOverride = v;
+}
+
+// Re-export as a const for backward compatibility.
+export const IS_PROVENANCE_ENABLED = false;
 
 export function createTrackedValue<T>(value: T, source: string): T | TrackedValue<T> {
-  if (!IS_PROVENANCE_ENABLED) {
+  if (!isProvenanceEnabled()) {
     return value;
   }
   
@@ -29,7 +43,7 @@ export function transformTrackedValue<T, U>(
   const actualValue = isTracked ? (tracked as TrackedValue<T>).value : tracked as T;
   const newValue = transformFn(actualValue);
 
-  if (!IS_PROVENANCE_ENABLED || !isTracked) {
+  if (!isProvenanceEnabled() || !isTracked) {
     return newValue;
   }
 

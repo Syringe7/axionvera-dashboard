@@ -107,18 +107,26 @@ describe('NotificationStore', () => {
   });
 
   it('persists read/unread state to localStorage', () => {
-    const store = new NotificationStore();
-    store.addNotification(makeNotification('persist-me'));
-    store.markAsRead('persist-me');
+    jest.useFakeTimers();
+    try {
+      const store = new NotificationStore();
+      store.addNotification(makeNotification('persist-me'));
+      store.markAsRead('persist-me');
 
-    const persisted = loadNotificationState();
-    expect(persisted?.items.find((n) => n.id === 'persist-me')?.read).toBe(true);
+      // Advance past the debounce delay so the write fires.
+      jest.advanceTimersByTime(350);
 
-    const reloaded = new NotificationStore();
-    reloaded.hydrate();
-    expect(reloaded.getSnapshot().items.find((n) => n.id === 'persist-me')?.read).toBe(
-      true,
-    );
+      const persisted = loadNotificationState();
+      expect(persisted?.items.find((n) => n.id === 'persist-me')?.read).toBe(true);
+
+      const reloaded = new NotificationStore();
+      reloaded.hydrate();
+      expect(reloaded.getSnapshot().items.find((n) => n.id === 'persist-me')?.read).toBe(
+        true,
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('notifies subscribers on changes', () => {

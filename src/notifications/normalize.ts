@@ -34,16 +34,21 @@ export function trackNotificationIds(
   });
 }
 
-/** Prunes dedupe sets to match retained notifications after capping. */
+/**
+ * Prunes dedupe sets to match retained notifications after capping.
+ * Single-pass: builds retained sets inline, then filters both seen sets.
+ */
 export function syncDedupeSets(
   items: AppNotification[],
   seenIds: Set<string>,
   seenSourceIds: Set<string>,
 ): void {
-  const retainedIds = new Set(items.map((n) => n.id));
-  const retainedSources = new Set(
-    items.flatMap((n) => (n.sourceId ? [n.sourceId] : [])),
-  );
+  const retainedIds = new Set<string>();
+  const retainedSources = new Set<string>();
+  for (const n of items) {
+    retainedIds.add(n.id);
+    if (n.sourceId) retainedSources.add(n.sourceId);
+  }
 
   for (const id of seenIds) {
     if (!retainedIds.has(id)) seenIds.delete(id);

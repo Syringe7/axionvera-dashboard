@@ -17,6 +17,8 @@ export { NetworkDiagram } from "./NetworkDiagram";
 export type { NetworkNode, NetworkEdge } from "./NetworkDiagram";
 
 export { StatisticsBar } from "./StatisticsBar";
+export { VaultBalanceAreaChart } from "./VaultBalanceAreaChart";
+export type { VaultBalanceAreaChartProps } from "./VaultBalanceAreaChart";
 
 export {
     ChartTooltip,

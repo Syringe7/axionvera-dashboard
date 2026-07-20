@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/design-system';
 import {
@@ -32,7 +33,12 @@ export interface NotificationItemProps {
   onDismiss: (id: string) => void;
 }
 
-export default function NotificationItem({
+/**
+ * Memoized notification item — only re-renders when the notification object
+ * reference or callbacks change. This prevents the entire list from
+ * re-rendering when unrelated store mutations occur.
+ */
+function NotificationItemComponent({
   notification,
   onMarkRead,
   onDismiss,
@@ -98,3 +104,8 @@ export default function NotificationItem({
     </li>
   );
 }
+
+const NotificationItem = memo(NotificationItemComponent);
+NotificationItem.displayName = 'NotificationItem';
+
+export default NotificationItem;

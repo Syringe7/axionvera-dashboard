@@ -106,6 +106,14 @@ export const LazyStatisticsBar = dynamic(
   }
 );
 
+export const LazyVaultBalanceAreaChart = dynamic(
+  () => import("@/charts").then((mod) => ({ default: mod.VaultBalanceAreaChart })),
+  {
+    loading: () => <LoadingFallback />,
+    ssr: false,
+  }
+);
+
 /**
  * Lazy-loaded Modal components.
  * Modals are only loaded when opened.

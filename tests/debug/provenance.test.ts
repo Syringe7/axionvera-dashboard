@@ -2,21 +2,19 @@ import {
   createTrackedValue,
   transformTrackedValue,
   extractValue,
-  IS_PROVENANCE_ENABLED,
+  __setProvenanceEnabled,
 } from '../../src/utils/provenance';
 import { TrackedValue } from '../../src/types/provenance';
 
-// Mock the environment variable check logic by temporarily redefining it if possible,
-// but since IS_PROVENANCE_ENABLED is a constant, we'll mock the window location in a jest setup,
-// or just test the logic directly. For this test, we assume we might need to override the flag.
-jest.mock('../../src/utils/provenance', () => {
-  const originalModule = jest.requireActual('../../src/utils/provenance');
-  return {
-    __esModule: true,
-    ...originalModule,
-    // We force the flag to true for testing the tracking logic
-    IS_PROVENANCE_ENABLED: true,
-  };
+// Enable provenance tracking via the test-only setter.
+// This avoids jsdom's non-configurable window.location.search property
+// and bypasses jest.mock's inability to override intra-module closures.
+beforeAll(() => {
+  __setProvenanceEnabled(true);
+});
+
+afterAll(() => {
+  __setProvenanceEnabled(null);
 });
 
 describe('Provenance Layer', () => {
@@ -69,8 +67,7 @@ describe('Provenance Layer', () => {
     it('works safely even if the input is not a tracked value', () => {
       const rawValue = 'raw_string';
       
-      // If we pass a raw value and tracking is enabled, it still just returns the transformed raw value
-      // Wait, transformTrackedValue checks if it isTracked. If not tracked, it just returns the new value.
+      // transformTrackedValue checks if it isTracked. If not tracked, it just returns the new value.
       const result = transformTrackedValue(rawValue, 'op', 'actor', (val) => val + '_modified');
       
       expect(result).toBe('raw_string_modified');

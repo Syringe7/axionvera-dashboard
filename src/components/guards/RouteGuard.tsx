@@ -10,6 +10,7 @@ import { useRouter } from "next/router";
 import { useRBAC } from "@/contexts/RBACContext";
 import { UserRole, Permission, RouteAccess } from "@/types/rbac";
 import { getRouteAccess } from "@/permissions/routes";
+import { canAccessRoute } from "@/permissions/rbac";
 import { validateNavigationTransition } from "@/navigation/stateMachine";
 
 interface RouteGuardProps {
@@ -131,6 +132,11 @@ export function withRouteGuard<P extends object>(
     fallback?: ReactNode;
   }
 ) {
+  // Hoist the HOC options so they're stable references inside the inner component.
+  const redirectPath = options?.redirectTo ?? "/";
+  const fallback = options?.fallback;
+  const loadingComponent = options?.loadingComponent;
+
   const GuardedComponent = (props: P) => {
     const router = useRouter();
     const { user, isAuthenticated } = useRBAC();
@@ -141,36 +147,34 @@ export function withRouteGuard<P extends object>(
       ? canAccessRoute(user, routeConfig)
       : { granted: true };
 
+    const transition = routeConfig
+      ? validateNavigationTransition("public", {
+          pathname: router.pathname,
+          user,
+          isAuthenticated,
+        })
+      : { allowed: true, redirectTo: undefined };
+
+    // Single combined useEffect — always called to satisfy hooks rules.
     useEffect(() => {
-      if (!routeConfig) return;
-      if (!accessResult.granted && !fallback) {
+      if (routeConfig && !accessResult.granted && !fallback) {
         router.push(redirectPath);
+      } else if (transition.allowed === false && !fallback) {
+        router.push(transition.redirectTo ?? redirectPath);
       }
-    }, [accessResult.granted, fallback, redirectPath, routeConfig, router]);
+    }, [accessResult.granted, fallback, redirectPath, routeConfig, router, transition.allowed, transition.redirectTo]);
 
     // If no config found, allow access (default behavior)
     if (!routeConfig) {
       return <Component {...props} />;
     }
 
-    const transition = validateNavigationTransition("public", {
-      pathname: router.pathname,
-      user,
-      isAuthenticated,
-    });
-
-    useEffect(() => {
-      if (!transition.allowed && !options?.fallback) {
-        router.push(transition.redirectTo ?? options?.redirectTo ?? "/");
-      }
-    }, [options?.fallback, options?.redirectTo, router, transition.allowed, transition.redirectTo]);
-
     // Access denied
     if (!transition.allowed) {
-      if (options?.fallback) {
-        return <>{options.fallback}</>;
+      if (fallback) {
+        return <>{fallback}</>;
       }
-      return options?.loadingComponent ? <>{options.loadingComponent}</> : null;
+      return loadingComponent ? <>{loadingComponent}</> : null;
     }
 
     // Access granted

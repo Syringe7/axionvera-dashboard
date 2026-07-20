@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { widgetRegistry } from "@/widgets/registry";
 
 /**
@@ -10,6 +10,9 @@ export function useWidgetLoading() {
   const [loadedEntities, setLoadedEntities] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Mutable ref tracks loaded IDs inside the mount-only effect without
+  // creating a stale-closure problem. The state is synced for UI reads.
+  const loadedRef = useRef(new Set<string>());
 
   useEffect(() => {
     async function loadAll() {
@@ -22,9 +25,10 @@ export function useWidgetLoading() {
           const dataSource = widgetRegistry.getDataSource(id);
           if (dataSource) {
             // Check if already loaded (sharing resource)
-            if (!loadedEntities.has(id)) {
+            if (!loadedRef.current.has(id)) {
               await dataSource.loader();
-              setLoadedEntities((prev) => new Set(prev).add(id));
+              loadedRef.current.add(id);
+              setLoadedEntities(new Set(loadedRef.current));
             }
           }
           // Widgets themselves might have some initialization, but usually they just wait for data
